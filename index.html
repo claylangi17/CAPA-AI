@@ -1,0 +1,101 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Generator CAPA Otomatis</title>
+    <link rel="stylesheet" href="style.css">
+</head>
+<body>
+    <div class="container">
+        <h1>Form Input Masalah CAPA</h1>
+        
+        <!-- Status notification for API issues -->
+        <div id="api-status" class="notification" style="display: none;">
+            <p>Layanan AI sedang tidak tersedia. Form tetap dapat digunakan dengan data sampel.</p>
+        </div>
+
+        <form id="capa-form">
+            <div class="form-group">
+                <label for="operator-name">Nama Operator:</label>
+                <input type="text" id="operator-name" name="operator_name" required>
+            </div>
+            <div class="form-group">
+                <label for="event-date">Tanggal Kejadian:</label>
+                <input type="date" id="event-date" name="event_date" required>
+            </div>
+            <div class="form-group">
+                <label for="machine-name">Nama Mesin:</label>
+                <input type="text" id="machine-name" name="machine_name" required>
+            </div>
+             <div class="form-group">
+                <label for="location">Lokasi:</label>
+                <input type="text" id="location" name="location" required>
+            </div>
+            <div class="form-group">
+                <label for="problem-type">Jenis Masalah:</label>
+                <select id="problem-type" name="problem_type" required>
+                    <option value="">--Pilih Jenis Masalah--</option>
+                    <option value="Cutting">Cutting</option>
+                    <option value="Printing">Printing</option>
+                    <option value="Gluing">Gluing</option>
+                    <option value="Lainnya">Lainnya</option>
+                </select>
+            </div>
+            <div class="form-group">
+                <label for="problem-description">Deskripsi Masalah:</label>
+                <textarea id="problem-description" name="problem_description" rows="4" required></textarea>
+            </div>
+            <div class="form-group">
+                <label for="initial-action">Tindakan Awal:</label>
+                <textarea id="initial-action" name="initial_action" rows="3" required></textarea>
+            </div>
+            <div class="form-group">
+                <label for="defect-photo">Upload Foto Produk Cacat:</label>
+                <input type="file" id="defect-photo" name="defect_photo" accept="image/*" required>
+                <img id="photo-preview" src="#" alt="Preview Foto Cacat" style="max-width: 200px; margin-top: 10px; display: none;"/>
+            </div>
+            <button type="submit" id="generate-button">Generate CAPA</button>
+        </form>
+
+        <!-- API Status Notification -->
+        <div id="api-status" style="display: none; margin-top: 15px; padding: 10px; background-color: #fff3cd; border: 1px solid #ffeeba; color: #856404; border-radius: 4px; text-align: center;">
+            Gagal menghubungi AI, menggunakan data contoh. Hasil mungkin kurang akurat.
+        </div>
+
+
+        <div id="loading-indicator" style="display: none; margin-top: 20px; text-align: center;">
+            <p>Memproses CAPA dengan AI...</p>
+            </div>
+
+        <!-- History Section Toggle -->
+        <div class="history-toggle-container" style="text-align: right; margin-top: 20px;">
+             <button id="history-button" class="secondary-button">Lihat Riwayat</button>
+        </div>
+
+        <!-- History Container (Initially Hidden) -->
+        <div id="history-container" style="display: none; margin-top: 20px; border-top: 1px solid #eee; padding-top: 20px;">
+            <h2>Riwayat Laporan CAPA</h2>
+            <ul id="history-list" style="list-style: none; padding: 0;">
+                <!-- History items will be populated by JavaScript -->
+                 <li style="text-align: center; color: #777;">Tidak ada riwayat.</li>
+            </ul>
+            <button id="clear-history-button" class="danger-button" style="margin-top: 10px;">Hapus Riwayat</button>
+        </div>
+
+
+        <div id="capa-result" style="display: none; margin-top: 30px;">
+            <h2>Hasil Dokumen CAPA (Dapat Diedit)</h2>
+            <div id="report-content" class="report-preview">
+                <!-- Konten CAPA (editable) akan dimasukkan di sini oleh JavaScript -->
+            </div>
+            <button id="download-pdf-button">Download PDF</button>
+        </div>
+    </div>
+
+    <!-- Libraries for PDF Generation -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+    <script src="script.js"></script>
+</body>
+</html>
