@@ -60,12 +60,71 @@ document.addEventListener('DOMContentLoaded', () => {
     photoInput.addEventListener('change', function(event) {
         const file = event.target.files[0];
         if (file) {
+            console.log("File selected:", file.name, "Type:", file.type, "Size:", file.size);
+            
+            // Verify if file is an image
+            if (!file.type.startsWith('image/')) {
+                alert("Mohon upload file gambar (JPEG, PNG, dll)");
+                photoInput.value = ""; // Reset input
+                photoPreview.style.display = 'none';
+                photoPreview.src = '#';
+                uploadedImageBase64 = null;
+                return;
+            }
+            
+            // Check file size (max 5MB)
+            if (file.size > 5 * 1024 * 1024) {
+                alert("Ukuran file terlalu besar. Maksimal 5MB.");
+                photoInput.value = ""; // Reset input
+                photoPreview.style.display = 'none';
+                photoPreview.src = '#';
+                uploadedImageBase64 = null;
+                return;
+            }
+            
             const reader = new FileReader();
             reader.onload = function(e) {
+                console.log("File loaded successfully, data length:", e.target.result.length);
+                
+                // Store format information for PDF generation
+                const imageFormat = file.type.split('/')[1].toUpperCase();
+                if (imageFormat === 'JPEG' || imageFormat === 'JPG') {
+                    window.uploadedImageFormat = 'JPEG';
+                } else if (imageFormat === 'PNG') {
+                    window.uploadedImageFormat = 'PNG';
+                } else {
+                    // Default to JPEG for other formats
+                    window.uploadedImageFormat = 'JPEG';
+                }
+                console.log("Image format detected:", window.uploadedImageFormat);
+                
                 photoPreview.src = e.target.result;
                 photoPreview.style.display = 'block';
                 uploadedImageBase64 = e.target.result; // Store base64 for later use
-            }
+                
+                // Preload image to verify it loads correctly
+                const img = new Image();
+                img.onload = function() {
+                    console.log("Image verified, dimensions:", img.width, "x", img.height);
+                    // Store original dimensions for PDF
+                    window.uploadedImageDimensions = {
+                        width: img.width,
+                        height: img.height
+                    };
+                };
+                img.onerror = function() {
+                    console.error("Error loading image preview");
+                    alert("Gambar tidak dapat ditampilkan. Coba format lain (JPEG/PNG).");
+                    photoInput.value = ""; // Reset input
+                    photoPreview.style.display = 'none';
+                    uploadedImageBase64 = null;
+                };
+                img.src = e.target.result;
+            };
+            reader.onerror = function(e) {
+                console.error("Error reading file:", e);
+                alert("Error membaca file. Silakan coba lagi.");
+            };
             reader.readAsDataURL(file);
         } else {
             photoPreview.style.display = 'none';
@@ -486,19 +545,44 @@ document.addEventListener('DOMContentLoaded', () => {
     // --- Display CAPA Result (with Editable Fields) ---
     function displayCapaResult(aiResponse, inputData) {
         console.log("Displaying CAPA result with AI response:", aiResponse); // Debug log
-
+        
         // Function to create styled textareas with content directly in the HTML
         const createTextarea = (id, content) => {
             console.log(`Creating textarea ${id} with content:`, content);
-
+            
             // Use direct HTML with content as both value attribute and inner text
             // This ensures the content appears in the textarea
-            return `<textarea
-                id="${id}"
-                style="width: 100%; min-height: 60px; margin-top: 5px; margin-bottom: 10px;
-                border: 1px solid #ccc; border-radius: 4px; padding: 8px;
+            return `<textarea 
+                id="${id}" 
+                style="width: 100%; min-height: 60px; margin-top: 5px; margin-bottom: 10px; 
+                border: 1px solid #ccc; border-radius: 4px; padding: 8px; 
                 font-family: inherit; font-size: inherit; box-sizing: border-box;"
             >${content || ''}</textarea>`;
+        };
+
+        // Create image HTML with error handling
+        const createImageHtml = () => {
+            if (!uploadedImageBase64) {
+                return '<p>Tidak ada foto diupload.</p>';
+            }
+            
+            console.log("Creating image preview in report, data length:", 
+                uploadedImageBase64 ? uploadedImageBase64.length : 0);
+            
+            return `
+                <div class="image-container" style="border: 1px solid #ddd; border-radius: 4px; padding: 10px; text-align: center;">
+                    <img 
+                        src="${uploadedImageBase64}" 
+                        alt="Foto Cacat - ${inputData.defect_photo_filename}" 
+                        style="max-width: 400px; max-height: 300px; margin-top: 10px;"
+                        onload="console.log('Report image loaded successfully')"
+                        onerror="console.error('Failed to load image in report'); this.style.display='none'; this.parentNode.innerHTML += '<p style=\'color:red\'>Gagal memuat gambar. Format tidak didukung.</p>'"
+                    />
+                    <p style="margin-top: 5px; font-style: italic; color: #666;">
+                        ${inputData.defect_photo_filename || 'Foto produk cacat'}
+                    </p>
+                </div>
+            `;
         };
 
         const reportHTML = `
@@ -532,7 +616,7 @@ document.addEventListener('DOMContentLoaded', () => {
              ${createTextarea('editable-deadline', aiResponse.deadline)}
 
             <h3>Bukti Foto</h3>
-            ${uploadedImageBase64 ? `<img src="${uploadedImageBase64}" alt="Foto Cacat - ${inputData.defect_photo_filename}" style="max-width: 400px; margin-top: 10px;">` : '<p>Tidak ada foto diupload.</p>'}
+            ${createImageHtml()}
         `;
         reportContentDiv.innerHTML = reportHTML;
 
@@ -943,33 +1027,183 @@ document.addEventListener('DOMContentLoaded', () => {
 
             // Evidence section with photo
             if (uploadedImageBase64) {
-                y = addSectionTitle("EVIDENCE", y);
-
-                // Photo frame with shadow effect
-                pdf.setFillColor(...lightGray);
-                pdf.roundedRect(34, y, 142, 95, 2, 2, 'F');
-                pdf.setFillColor(...white);
-                pdf.roundedRect(32, y - 2, 142, 95, 2, 2, 'F');
-
-                // Photo caption
-                pdf.setTextColor(...brandPrimary);
-                pdf.setFontSize(9);
+                // Always create a new page for the image to ensure it has enough space
+                pdf.addPage();
+                y = 30; // Reset Y position on new page
+                
+                // Add dedicated Evidence page with more space for the image
+                // Add page header
+                pdf.setFillColor(...brandPrimary);
+                pdf.rect(0, 0, 210, 20, 'F');
+                pdf.setTextColor(...white);
+                pdf.setFontSize(14);
                 pdf.setFont("helvetica", "bold");
-                pdf.text(`Documentation of ${textContent.problemType} issue on ${textContent.machineName}`, 105, y + 8, { align: "center" });
-
+                pdf.text("EVIDENCE", 105, 13, { align: "center" });
+                pdf.setFontSize(8);
+                pdf.setFont("helvetica", "normal");
+                pdf.text(`${textContent.machineName} - ${textContent.problemType}`, 190, 13, { align: "right" });
+                
+                // Add accent bar
+                pdf.setFillColor(...accentColor);
+                pdf.rect(0, 20, 210, 2, 'F');
+                
+                // Calculate more space for the image - use most of the page
+                const imageBoxHeight = 180;
+                const imageWidth = 170;
+                const imageHeight = 150;
+                
+                // Photo frame with shadow effect - larger box
+                pdf.setFillColor(...lightGray);
+                pdf.roundedRect(20, y + 10, 170, imageBoxHeight, 2, 2, 'F');
+                pdf.setFillColor(...white);
+                pdf.roundedRect(18, y + 8, 170, imageBoxHeight, 2, 2, 'F');
+                
+                // Photo caption at the top
+                pdf.setTextColor(...brandPrimary);
+                pdf.setFontSize(11);
+                pdf.setFont("helvetica", "bold");
+                pdf.text(`Documentation of ${textContent.problemType} issue on ${textContent.machineName}`, 105, y + 25, { align: "center" });
+                
                 try {
-                    // Calculate image dimensions to fit within frame
-                    const imgWidth = 130;
-                    const imgHeight = 75;
-
-                    // Add image
-                    pdf.addImage(uploadedImageBase64, 'JPEG', 38, y + 15, imgWidth, imgHeight);
+                    // Pre-process the image for better reliability
+                    let imgDataForPdf = uploadedImageBase64;
+                    const imageFormat = window.uploadedImageFormat || 'JPEG';
+                    
+                    // Ensure the image format is correct for jsPDF
+                    if (imgDataForPdf.indexOf('data:image/') === 0) {
+                        // Already in base64 format with correct header
+                        console.log("Image is in correct base64 format");
+                    } else {
+                        // Add proper header if missing
+                        imgDataForPdf = `data:image/${imageFormat.toLowerCase()};base64,` + imgDataForPdf;
+                        console.log("Added proper header to image data");
+                    }
+                    
+                    console.log("Adding image to PDF", { imgWidth: imageWidth, imgHeight: imageHeight, format: imageFormat });
+                    
+                    // Center the image within the box
+                    const xPos = 105 - (imageWidth / 2);
+                    
+                    // Try first approach - object parameter method
+                    try {
+                        // Add the image with object parameters
+                        pdf.addImage({
+                            imageData: imgDataForPdf,
+                            format: imageFormat,
+                            x: xPos,
+                            y: y + 40, // More space from caption
+                            width: imageWidth,
+                            height: imageHeight,
+                            compression: 'NONE'
+                        });
+                        console.log("Image added to PDF successfully - method 1");
+                    } catch (err1) {
+                        console.warn("First image adding method failed:", err1);
+                        
+                        // Try second approach - direct parameters method
+                        try {
+                            pdf.addImage(
+                                imgDataForPdf,  // image data
+                                imageFormat,   // format
+                                xPos,          // x position
+                                y + 40,        // y position
+                                imageWidth,    // width
+                                imageHeight,   // height
+                                undefined,     // alias
+                                'NONE',        // compression
+                                0              // rotation
+                            );
+                            console.log("Image added to PDF successfully - method 2");
+                        } catch (err2) {
+                            console.warn("Second image adding method failed:", err2);
+                            
+                            // Last resort - try creating a canvas
+                            try {
+                                const canvas = document.createElement('canvas');
+                                const ctx = canvas.getContext('2d');
+                                const tempImg = new Image();
+                                
+                                // Set canvas dimensions
+                                canvas.width = imageWidth;
+                                canvas.height = imageHeight;
+                                
+                                // Draw image to canvas when loaded
+                                tempImg.onload = function() {
+                                    // Fill with white background first
+                                    ctx.fillStyle = 'white';
+                                    ctx.fillRect(0, 0, canvas.width, canvas.height);
+                                    
+                                    // Draw image centered and scaled
+                                    ctx.drawImage(tempImg, 0, 0, canvas.width, canvas.height);
+                                    
+                                    // Get data URL from canvas and add to PDF
+                                    const canvasData = canvas.toDataURL('image/jpeg', 0.95);
+                                    pdf.addImage(
+                                        canvasData,  // image data
+                                        'JPEG',     // format
+                                        xPos,       // x position
+                                        y + 40,     // y position
+                                        imageWidth, // width
+                                        imageHeight // height
+                                    );
+                                    console.log("Image added to PDF successfully - canvas method");
+                                };
+                                
+                                tempImg.onerror = function() {
+                                    console.error("Failed to load image into canvas");
+                                    // Just continue PDF generation without the image
+                                };
+                                
+                                // Load the image
+                                tempImg.src = imgDataForPdf;
+                            } catch (err3) {
+                                console.error("All image adding methods failed:", err3);
+                                // Continue without image
+                            }
+                        }
+                    }
                 } catch (imgError) {
                     console.error("Error adding image to PDF:", imgError);
+                    // Add detailed error information to help debug
+                    console.error("Image data type:", typeof uploadedImageBase64);
+                    console.error("Image data length:", uploadedImageBase64 ? uploadedImageBase64.length : 0);
+                    console.error("Image data starts with:", uploadedImageBase64 ? uploadedImageBase64.substring(0, 50) + "..." : "null");
+                    
+                    // Show error in the PDF
                     pdf.setFont("helvetica", "normal");
-                    pdf.text("Image could not be loaded", 105, y + 50, { align: "center" });
+                    pdf.setTextColor(...darkColor);
+                    pdf.setFontSize(10);
+                    pdf.text("Gagal memuat foto. Cek apakah format foto didukung (JPG/PNG)", 105, y + 100, { align: "center" });
                 }
-                 y += 105; // Adjust y position after adding image box
+                
+                // Add descriptive text below image
+                pdf.setFont("helvetica", "italic");
+                pdf.setTextColor(...darkColor);
+                pdf.setFontSize(9);
+                pdf.text(`File: ${textContent.defect_photo_filename || "Image file"}`, 105, y + imageHeight + 50, { align: "center" });
+                
+                // Add page footer
+                const pageCount = pdf.internal.getNumberOfPages();
+                const currentPage = pageCount;
+                
+                // Footer bar
+                pdf.setFillColor(...lightGray);
+                pdf.rect(0, 277, 210, 20, 'F');
+                
+                // Page number
+                pdf.setTextColor(...darkColor);
+                pdf.setFontSize(8);
+                pdf.text(`Page ${currentPage} | CAPA Report`, 15, 289);
+                
+                // Confidentiality note
+                pdf.setFont("helvetica", "italic");
+                pdf.text("Confidential", 190, 289, { align: "right" });
+                
+                // Accent line
+                pdf.setFillColor(...accentColor);
+                pdf.rect(0, 277, 210, 0.5, 'F');
+                
+                // We don't need to update y position since we're on a separate page
             }
 
             // Add page footer
