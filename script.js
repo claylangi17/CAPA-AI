@@ -9,11 +9,20 @@ document.addEventListener('DOMContentLoaded', () => {
     const loadingIndicator = document.getElementById('loading-indicator');
     const generateButton = document.getElementById('generate-button');
     const apiStatusDiv = document.getElementById('api-status');
-    // History Elements (IDs assumed, will be added to HTML later)
+    
+    // History Elements
     const historyButton = document.getElementById('history-button');
     const historyContainer = document.getElementById('history-container');
     const historyList = document.getElementById('history-list');
     const clearHistoryButton = document.getElementById('clear-history-button');
+    
+    // Log DOM elements to help debug
+    console.log("History elements:", { 
+        historyButton, 
+        historyContainer, 
+        historyList, 
+        clearHistoryButton 
+    });
 
     // --- State Variables ---
     let uploadedImageBase64 = null; // To store the uploaded image data for PDF
@@ -22,6 +31,30 @@ document.addEventListener('DOMContentLoaded', () => {
     const HISTORY_KEY = 'capaHistory';
     const MAX_HISTORY_ITEMS = 10; // Limit history size
     const HISTORY_CONTEXT_COUNT = 3; // Number of recent reports to send to AI
+
+    // --- Initialize History Functionality ---
+    if (historyButton && historyContainer) {
+        historyButton.addEventListener('click', () => {
+            console.log("History button clicked");
+            const isVisible = historyContainer.style.display === 'block';
+            if (isVisible) {
+                historyContainer.style.display = 'none';
+                historyButton.textContent = 'Lihat Riwayat';
+            } else {
+                displayHistory(); // Load and display history
+                historyContainer.style.display = 'block';
+                historyButton.textContent = 'Sembunyikan Riwayat';
+            }
+        });
+    } else {
+        console.error("History button or container not found in the DOM! Button:", historyButton, "Container:", historyContainer);
+    }
+
+    if (clearHistoryButton) {
+        clearHistoryButton.addEventListener('click', clearHistory);
+    } else {
+        console.error("Clear history button not found in the DOM!");
+    }
 
     // --- Image Preview ---
     photoInput.addEventListener('change', function(event) {
@@ -265,7 +298,6 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     }
 
-
     // --- History Functions ---
     function getHistory() {
         const historyJson = localStorage.getItem(HISTORY_KEY);
@@ -303,8 +335,95 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     }
 
+    // Function to populate the form with history data
+    function fillFormWithHistory(inputData) {
+        // Fill form fields with data from history
+        document.getElementById('operator-name').value = inputData.operator_name || '';
+        document.getElementById('event-date').value = inputData.event_date || '';
+        document.getElementById('machine-name').value = inputData.machine_name || '';
+        document.getElementById('location').value = inputData.location || '';
+        document.getElementById('problem-type').value = inputData.problem_type || '';
+        document.getElementById('problem-description').value = inputData.problem_description || '';
+        document.getElementById('initial-action').value = inputData.initial_action || '';
+        
+        // Note: We can't restore the image from history as we're not storing the base64 data long-term
+        // That would consume too much localStorage space
+        photoPreview.style.display = 'none';
+        uploadedImageBase64 = null;
+    }
+
+    // Create sample history data for testing
+    function createSampleHistory() {
+        const sampleData = [
+            {
+                id: Date.now() - 86400000, // Yesterday
+                timestamp: new Date(Date.now() - 86400000).toISOString(),
+                input: {
+                    operator_name: "Budi Santoso",
+                    event_date: "2023-08-15",
+                    machine_name: "Printer X2000",
+                    location: "Lantai 2, Area Produksi",
+                    problem_type: "Printing",
+                    problem_description: "Hasil cetakan tidak rata dan terdapat bercak tinta di beberapa area.",
+                    initial_action: "Melakukan pembersihan pada print head dan roller.",
+                    defect_photo_filename: "print_defect.jpg"
+                },
+                output: {
+                    rootCauseAnalysis: "Analisis menunjukkan bahwa masalah disebabkan oleh tekanan roller yang tidak merata dan tinta yang mulai mengering di beberapa nozzle print head.",
+                    correctiveActions: "• Melakukan pembersihan print head secara menyeluruh\n• Mengganti roller yang aus\n• Menyesuaikan tekanan pada sistem roller",
+                    preventiveActions: "• Membuat jadwal pembersihan rutin print head setiap 3 hari\n• Memastikan tinta selalu dalam kondisi baik\n• Pelatihan operator tentang tanda-tanda awal masalah printing",
+                    pic: "Kepala Bagian Printing",
+                    deadline: "25 Agustus 2023"
+                }
+            },
+            {
+                id: Date.now() - 172800000, // 2 days ago
+                timestamp: new Date(Date.now() - 172800000).toISOString(),
+                input: {
+                    operator_name: "Diana Wijaya",
+                    event_date: "2023-08-14",
+                    machine_name: "Cutting Machine C500",
+                    location: "Lantai 1, Area Pemotongan",
+                    problem_type: "Cutting",
+                    problem_description: "Pemotongan tidak presisi, dengan deviasi ukuran hingga 3mm dari spesifikasi.",
+                    initial_action: "Mengecek ketajaman pisau dan melakukan kalibrasi ulang.",
+                    defect_photo_filename: "cutting_defect.jpg"
+                },
+                output: {
+                    rootCauseAnalysis: "Pisau pemotong sudah tumpul dan terdapat ketidaksesuaian pada sistem kalibrasi mesin. Selain itu, terdapat beberapa komponen yang aus mengurangi stabilitas mesin saat beroperasi.",
+                    correctiveActions: "• Mengganti pisau pemotong dengan yang baru\n• Melakukan kalibrasi ulang dengan alat ukur presisi\n• Memeriksa dan memperbaiki sistem tension control",
+                    preventiveActions: "• Membuat jadwal penggantian pisau secara berkala\n• Pemeriksaan kalibrasi mingguan\n• Menyiapkan pisau cadangan untuk penggantian cepat",
+                    pic: "Supervisor Produksi",
+                    deadline: "20 Agustus 2023"
+                }
+            }
+        ];
+
+        // Check if history already exists
+        const currentHistory = getHistory();
+        if (currentHistory.length === 0) {
+            try {
+                localStorage.setItem(HISTORY_KEY, JSON.stringify(sampleData));
+                console.log("Sample history data created successfully!");
+                return true;
+            } catch (e) {
+                console.error("Error creating sample history:", e);
+                return false;
+            }
+        }
+        return false; // No sample data created because history already exists
+    }
+
+    // Call this when no history exists to create sample data
+    if (getHistory().length === 0) {
+        createSampleHistory();
+    }
+
     function displayHistory() {
-        if (!historyList) return; // Guard if element doesn't exist
+        if (!historyList) {
+            console.error("History list element not found!");
+            return;
+        }
 
         const history = getHistory();
         historyList.innerHTML = ''; // Clear existing list
@@ -319,7 +438,7 @@ document.addEventListener('DOMContentLoaded', () => {
             li.dataset.historyId = item.id; // Store ID for potential future use (e.g., load item)
 
             const displayDate = new Date(item.timestamp).toLocaleString('id-ID', {
-                 dateStyle: 'medium', timeStyle: 'short'
+                dateStyle: 'medium', timeStyle: 'short'
             });
 
             li.innerHTML = `
@@ -327,15 +446,27 @@ document.addEventListener('DOMContentLoaded', () => {
                 <span class="history-item-problem">Mesin: ${item.input.machine_name || 'N/A'} - Masalah: ${item.input.problem_type || 'N/A'}</span>
                 <span class="history-item-details">Deskripsi: ${item.input.problem_description.substring(0, 100)}${item.input.problem_description.length > 100 ? '...' : ''}</span>
             `;
-            // Add click listener (optional - for loading history item)
+            
+            // Add click listener to load history item
             li.addEventListener('click', () => {
                 console.log("Clicked history item:", item);
-                // Optional: Implement logic to load this item back into the form/result view
-                alert(`Riwayat dipilih:\nMesin: ${item.input.machine_name}\nTanggal: ${item.input.event_date}\nMasalah: ${item.input.problem_description}`);
-                // Example: fillFormWithHistory(item.input); displayCapaResult(item.output, item.input);
-                historyContainer.style.display = 'none'; // Hide history after selection
-                historyButton.textContent = 'Lihat Riwayat';
+                
+                // Show confirmation dialog
+                if (confirm(`Lihat detail laporan ${item.input.machine_name} - ${item.input.problem_type}?`)) {
+                    // Load the history item
+                    fillFormWithHistory(item.input);
+                    displayCapaResult(item.output, item.input);
+                    
+                    // Show the result and scroll to it
+                    capaResultDiv.style.display = 'block';
+                    capaResultDiv.scrollIntoView({ behavior: 'smooth' });
+                    
+                    // Hide history panel
+                    historyContainer.style.display = 'none';
+                    historyButton.textContent = 'Lihat Riwayat';
+                }
             });
+            
             historyList.appendChild(li);
         });
     }
@@ -347,34 +478,10 @@ document.addEventListener('DOMContentLoaded', () => {
                 displayHistory(); // Refresh the displayed list (will show empty)
                 console.log("History cleared.");
             } catch (e) {
-                 console.error("Error clearing history from localStorage:", e);
+                console.error("Error clearing history from localStorage:", e);
             }
         }
     }
-
-    // --- Event Listeners for History ---
-    if (historyButton && historyContainer) {
-        historyButton.addEventListener('click', () => {
-            const isVisible = historyContainer.style.display === 'block';
-            if (isVisible) {
-                historyContainer.style.display = 'none';
-                historyButton.textContent = 'Lihat Riwayat';
-            } else {
-                displayHistory(); // Load and display history
-                historyContainer.style.display = 'block';
-                historyButton.textContent = 'Sembunyikan Riwayat';
-            }
-        });
-    } else {
-        console.warn("History button or container not found in the DOM.");
-    }
-
-    if (clearHistoryButton) {
-        clearHistoryButton.addEventListener('click', clearHistory);
-    } else {
-         console.warn("Clear history button not found in the DOM.");
-    }
-
 
     // --- Display CAPA Result (with Editable Fields) ---
     function displayCapaResult(aiResponse, inputData) {
@@ -929,29 +1036,5 @@ document.addEventListener('DOMContentLoaded', () => {
             alert("Gagal membuat PDF. Silakan cek konsol untuk detail.");
         }
     });
-
-    // --- Initialize History View ---
-    // Add event listeners if elements exist
-    if (historyButton && historyContainer) {
-        historyButton.addEventListener('click', () => {
-            const isVisible = historyContainer.style.display === 'block';
-            if (isVisible) {
-                historyContainer.style.display = 'none';
-                historyButton.textContent = 'Lihat Riwayat';
-            } else {
-                displayHistory(); // Load and display history when opening
-                historyContainer.style.display = 'block';
-                historyButton.textContent = 'Sembunyikan Riwayat';
-            }
-        });
-    } else {
-        console.warn("History button or container element not found.");
-    }
-
-    if (clearHistoryButton) {
-        clearHistoryButton.addEventListener('click', clearHistory);
-    } else {
-        console.warn("Clear history button element not found.");
-    }
 
 }); // End DOMContentLoaded
